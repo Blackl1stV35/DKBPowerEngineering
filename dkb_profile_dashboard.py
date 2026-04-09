@@ -1,9 +1,15 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║  DKB POWER ENGINEERING CO., LTD.                                            ║
-║  Company Profile Dashboard  v3.0  —  dkb_profile_dashboard.py               ║
+║  Company Profile Dashboard v3.1 — GitHub Auto-Commit Edition                ║
+║  dkb_profile_dashboard.py                                                   ║
 ║                                                                              ║
-║  Fixes in v3:                                                               ║
+║  v3.1 Features:                                                             ║
+║  • Auto-commit to GitHub on all data changes (projects, company, sections)  ║
+║  • Uses Streamlit Secrets for secure token storage                          ║
+║  • Graceful error handling — no app crashes on push failures                ║
+║                                                                              ║
+║  v3.0 Fixes:                                                                ║
 ║  • Thai font rendering: w:rFonts with ascii+hAnsi+cs+eastAsia on every run  ║
 ║  • No placeholders anywhere in the generated .docx                          ║
 ║  • use_container_width → width (Streamlit 1.40+ compatible)                 ║
@@ -14,7 +20,7 @@
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
-import io, json, os, re, uuid
+import io, json, os, re, uuid, subprocess
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
@@ -43,6 +49,60 @@ SECTIONS_FILE= BASE_DIR / "custom_sections.json"
 
 for _d in (PHOTOS_DIR, OUTPUT_DIR, ASSETS_DIR):
     _d.mkdir(exist_ok=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  GITHUB AUTO-COMMIT HELPER
+# ══════════════════════════════════════════════════════════════════════════════
+
+def git_commit_and_push(message: str):
+    """
+    Commit changes to Git and push to GitHub using token from Streamlit Secrets.
+    Handles errors gracefully without crashing the app.
+    """
+    try:
+        # Check if secrets are configured
+        if "github" not in st.secrets or "token" not in st.secrets["github"]:
+            st.warning("⚠️ GitHub token not found in Streamlit Secrets. Skipping auto-commit.")
+            return
+        
+        token = st.secrets["github"]["token"]
+        repo_url = f"https://oauth2:{token}@github.com/$(git config --get remote.origin.url | sed 's|.*/||')"
+        
+        # Stage changes
+        subprocess.run(["git", "add", "."], cwd=BASE_DIR, check=True, capture_output=True)
+        
+        # Commit with message
+        result = subprocess.run(
+            ["git", "commit", "-m", message],
+            cwd=BASE_DIR,
+            capture_output=True,
+            text=True
+        )
+        
+        # If no changes to commit, just return silently
+        if result.returncode != 0 and "nothing to commit" in result.stderr:
+            return
+        
+        if result.returncode != 0:
+            st.warning(f"⚠️ Git commit failed: {result.stderr}")
+            return
+        
+        # Push to GitHub
+        push_result = subprocess.run(
+            ["git", "push"],
+            cwd=BASE_DIR,
+            capture_output=True,
+            text=True
+        )
+        
+        if push_result.returncode == 0:
+            st.info(f"✅ Auto-commit pushed: {message}")
+        else:
+            st.warning(f"⚠️ Git push failed. Changes saved locally. Error: {push_result.stderr}")
+    
+    except Exception as e:
+        st.warning(f"⚠️ Git operation failed: {str(e)} — Changes saved locally.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -997,6 +1057,7 @@ def _tab_add_project(projects: list):
         }
         updated = projects + [new_proj]
         save_projects(updated)
+        git_commit_and_push(f"Added project #{new_proj['no']}: {new_proj['name_th']}")
         st.success(f"✅ บันทึกโครงการที่ {new_proj['no']}: {new_proj['name_th']}")
         if photos: st.info(f"📸 บันทึก {len(photos)} รูปภาพ")
         st.balloons()
@@ -1054,12 +1115,14 @@ def _tab_view_projects(projects: list):
                             if p2["id"]==proj["id"]:
                                 p2["photos"] = p2.get("photos",[])+fns
                         save_projects(projects)
+                        git_commit_and_push(f"Added {len(fns)} photo(s) to project #{proj['no']}: {proj['name_th']}")
                         st.success(f"เพิ่ม {len(fns)} รูปแล้ว"); st.rerun()
 
             if st.button("🗑️ ลบโครงการนี้", key=f"del_{proj['id']}", type="secondary"):
                 rem = [p for p in projects if p["id"]!=proj["id"]]
                 for k,p in enumerate(rem): p["no"]=k+1
                 save_projects(rem); st.session_state.projects=rem
+                git_commit_and_push(f"Deleted project: {proj['name_th']}")
                 st.warning(f"ลบ '{proj['name_th']}' แล้ว"); st.rerun()
     return None
 
@@ -1099,10 +1162,13 @@ def _tab_custom_sections(sections: list):
                     if more:
                         fns = save_photos(more)
                         sec["photos"] = sec.get("photos",[])+fns
-                        save_sections(sections); st.success(f"เพิ่ม {len(fns)} รูป"); st.rerun()
+                        save_sections(sections)
+                        git_commit_and_push(f"Added {len(fns)} photo(s) to section: {sec['title_th']}")
+                        st.success(f"เพิ่ม {len(fns)} รูป"); st.rerun()
 
             if st.button("🗑️ ลบ Section นี้", key=f"dsec_{sec['id']}", type="secondary"):
                 sections.remove(sec); save_sections(sections)
+                git_commit_and_push(f"Deleted custom section: {sec['title_th']}")
                 st.session_state.sections = sections
                 st.warning("ลบ Section แล้ว"); st.rerun()
 
@@ -1171,6 +1237,7 @@ def _tab_custom_sections(sections: list):
         }
         updated = sections + [new_sec]
         save_sections(updated)
+        git_commit_and_push(f"Added new custom section: {new_sec['title_th']}")
         st.success(f"✅ เพิ่ม Section: {new_sec['title_th']}")
         return updated
     return None
@@ -1218,6 +1285,7 @@ def _tab_company(co: dict):
             "logo_file":logo_fn,
         }
         save_company(updated)
+        git_commit_and_push(f"Updated company information")
         st.success("✅ บันทึกข้อมูลบริษัทสำเร็จ")
         return updated
     return None
@@ -1249,7 +1317,7 @@ def main():
     # Header
     st.markdown(f"""
     <div class="app-header">
-      <div class="tag">Company Profile Dashboard  ·  v3.0</div>
+      <div class="tag">Company Profile Dashboard v3.1  ·  GitHub Auto-Commit</div>
       <h1>⚡ DKB POWER ENGINEERING CO., LTD.</h1>
       <p>บริษัท ดีเคบี เพาเวอร์ เอนจิเนียริ่ง จำกัด  ·
          {len(projects)} โครงการ  ·  {len(sections)} Custom Section(s)</p>
@@ -1311,7 +1379,7 @@ def main():
 
     st.markdown(
         f"<div style='text-align:center;margin-top:28px;font-size:11px;color:#AAB8C8;'>"
-        f"DKB Power Engineering Co., Ltd.  ·  Profile Dashboard v3.0  ·  {co['year']}</div>",
+        f"DKB Power Engineering Co., Ltd.  ·  Profile Dashboard v3.1 (GitHub Auto-Commit)  ·  {co['year']}</div>",
         unsafe_allow_html=True)
 
 
