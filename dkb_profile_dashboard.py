@@ -35,6 +35,8 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
+import git
+from git import Repo
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  PATHS
@@ -50,9 +52,8 @@ SECTIONS_FILE= BASE_DIR / "custom_sections.json"
 for _d in (PHOTOS_DIR, OUTPUT_DIR, ASSETS_DIR):
     _d.mkdir(exist_ok=True)
 
-
 # ══════════════════════════════════════════════════════════════════════════════
-#  GITHUB AUTO-COMMIT HELPER
+#  GITHUB AUTO-COMMIT HELPER (v3.1 Fixed)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def git_commit_and_push(message: str):
@@ -64,46 +65,45 @@ def git_commit_and_push(message: str):
         # Check if secrets are configured
         if "github" not in st.secrets or "token" not in st.secrets["github"]:
             st.warning("⚠️ GitHub token not found in Streamlit Secrets. Skipping auto-commit.")
-            return
-        
-        token = st.secrets["github"]["token"]
-        repo_url = f"https://oauth2:{token}@github.com/$(git config --get remote.origin.url | sed 's|.*/||')"
-        
-        # Stage changes
-        subprocess.run(["git", "add", "."], cwd=BASE_DIR, check=True, capture_output=True)
-        
-        # Commit with message
-        result = subprocess.run(
-            ["git", "commit", "-m", message],
-            cwd=BASE_DIR,
-            capture_output=True,
-            text=True
-        )
-        
-        # If no changes to commit, just return silently
-        if result.returncode != 0 and "nothing to commit" in result.stderr:
-            return
-        
-        if result.returncode != 0:
-            st.warning(f"⚠️ Git commit failed: {result.stderr}")
-            return
-        
-        # Push to GitHub
-        push_result = subprocess.run(
-            ["git", "push"],
-            cwd=BASE_DIR,
-            capture_output=True,
-            text=True
-        )
-        
-        if push_result.returncode == 0:
-            st.info(f"✅ Auto-commit pushed: {message}")
-        else:
-            st.warning(f"⚠️ Git push failed. Changes saved locally. Error: {push_result.stderr}")
-    
-    except Exception as e:
-        st.warning(f"⚠️ Git operation failed: {str(e)} — Changes saved locally.")
+            return False
 
+        token = st.secrets["github"]["token"]
+        repo_url = f"https://{token}@github.com/Blackl1stV35/DKBPowerEngineering.git"
+
+        # Clone on first run, otherwise pull latest
+        if not Path(".git").exists():
+            Repo.clone_from(repo_url, ".", depth=1)
+        else:
+            repo = Repo(".")
+            repo.remotes.origin.set_url(repo_url)
+            repo.remotes.origin.pull()
+
+        repo = Repo(".")
+
+        # Set git identity (this fixes the "Author identity unknown" error)
+        repo.git.config("user.email", "streamlit@dkbpowerengineering.com")
+        repo.git.config("user.name", "DKB Streamlit Bot")
+
+        # Stage all changes
+        repo.git.add(A=True)
+
+        # Commit (skip if nothing changed)
+        try:
+            repo.index.commit(message)
+        except git.exc.GitCommandError as e:
+            if "nothing to commit" in str(e).lower():
+                return True
+            raise
+
+        # Push
+        repo.remotes.origin.push()
+
+        st.success(f"✅ GitHub committed & pushed: {message}")
+        return True
+
+    except Exception as e:
+        st.warning(f"⚠️ GitHub push failed (data still saved locally): {str(e)}")
+        return False
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  DEFAULTS
