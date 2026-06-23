@@ -30,5 +30,21 @@
     "value": "466450",
     "photos": [],
     "created_at": "2026-06-23T15:59:23.600921"
+  },
+  {
+    "id": "proj_9cadafbb",
+    "no": 3,
+    "name_th": "โครงการตรวจคนเข้าเมือง",
+    "name_en": "-",
+    "customer_th": "-",
+    "customer_en": "-",
+    "main_contact": "-",
+    "location": "จ.สุพรรณบุรี",
+    "desc_th": "งานติดตั้งหม้อแปลงไฟฟ้า",
+    "desc_en": "-",
+    "period": "-",
+    "value": "500,000",
+    "photos": [],
+    "created_at": "2026-06-23T16:00:26.302777"
   }
 ]
