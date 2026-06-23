@@ -32,5 +32,21 @@
       "c07c28d7_sequence_profiles_all.png"
     ],
     "created_at": "2026-05-03T09:27:17.457172"
+  },
+  {
+    "id": "proj_7927ee8c",
+    "no": 2,
+    "name_th": "โครงการเรือนเเถวตำรวจ สภ.บางโทรัด",
+    "name_en": "-",
+    "customer_th": "-",
+    "customer_en": "-",
+    "main_contact": "บ.ณัฐกิจการช่าง",
+    "location": "จ.สมุทรสาคร",
+    "desc_th": "งานติดตั้งระบบทีวี",
+    "desc_en": "-",
+    "period": "-",
+    "value": "35310",
+    "photos": [],
+    "created_at": "2026-06-23T15:55:23.958247"
   }
 ]
